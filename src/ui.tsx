@@ -46,7 +46,14 @@ function Plugin() {
 
   const scrollableRef = useRef<HTMLDivElement>(null)
   const toastTimer = useRef<number | null>(null)
+  const hasManuallyEditedNameRef = useRef(false)  // 使用 ref 避免闭包陷阱
   const [isToastShowing, setIsToastShowing] = useState(false)
+  const [isSticky, setIsSticky] = useState(false)  // 追踪预览区域是否处于 sticky 状态
+
+  // 同步 hasManuallyEditedName 到 ref
+  useEffect(() => {
+    hasManuallyEditedNameRef.current = hasManuallyEditedName
+  }, [hasManuallyEditedName])
 
   // 显示 toast 的通用函数
   const showToastMessage = useCallback(function (message: string) {
@@ -215,25 +222,33 @@ function Plugin() {
             setAllSelectedNames(allSelectedNames)
           }
 
-          // 选中图层变化时，重置标记（允许重新自动填充）
-          setHasAutoFilled(false)
-          setHasManuallyEditedName(false)
-
           // 取消选中图层：清空输入框，恢复默认态
           if (count === 0) {
             setExportName('')
             setRenameValue('')
             setAllSelectedNames([])
+            setHasAutoFilled(false)
+            setHasManuallyEditedName(false)
+            hasManuallyEditedNameRef.current = false
           }
-          // 切图模式：自动填充原有名称到输入框
-          else if (currentMode === 'export' && selectedName) {
-            setExportName(selectedName)
-            setHasAutoFilled(true)  // 标记已自动填充
+          // 切图模式：单个图层时自动填充图层名称到输入框
+          else if (currentMode === 'export' && count === 1 && selectedName) {
+            // 如果用户没有手动编辑，或者当前值与之前自动填充的值相同，则更新为新图层名称
+            if (!hasManuallyEditedNameRef.current || exportName === selectedLayerName) {
+              setExportName(selectedName)
+              setHasAutoFilled(true)
+              hasManuallyEditedNameRef.current = true
+              setHasManuallyEditedName(true)
+            }
           }
           // 图层命名模式：自动填充原有名称到输入框
           else if (currentMode === 'layer' && selectedName) {
-            setRenameValue(selectedName)
-            setHasAutoFilled(true)  // 标记已自动填充
+            if (!hasManuallyEditedNameRef.current || renameValue === selectedLayerName) {
+              setRenameValue(selectedName)
+              setHasAutoFilled(true)
+              hasManuallyEditedNameRef.current = true
+              setHasManuallyEditedName(true)
+            }
           }
         }
       }
@@ -246,7 +261,7 @@ function Plugin() {
     return () => {
       window.removeEventListener('message', handleMessage)
     }
-  }, [currentMode, exportName, renameValue, hasManuallyEditedName])
+  }, [currentMode, exportName, renameValue, selectedLayerName])
 
   // 计算预览名称
   const previewName = useMemo(() => {
@@ -294,7 +309,7 @@ function Plugin() {
 
       return newName
     }
-  }, [currentMode, selectedLayerName, renameValue, prefix, suffix, startNumber, addNumber, showPrefix, showSuffix, useYoungPrefix, exportType, exportStyle, exportCategory, exportName, exportState, exportColor, exportSize, exportOpacity, useDarkMode, showState, showColor, showSize, showOpacity, generateExportName, selectionCount, hasManuallyEditedName])
+  }, [currentMode, selectedLayerName, renameValue, prefix, suffix, startNumber, addNumber, showPrefix, showSuffix, useYoungPrefix, exportType, exportStyle, exportCategory, exportName, exportState, exportColor, exportSize, exportOpacity, useDarkMode, showState, showColor, showSize, showOpacity, generateExportName])
 
   // 处理应用按钮点击
   const handleApplyRename = useCallback(function () {
@@ -409,24 +424,43 @@ function Plugin() {
     }
   }, [currentMode])
 
+  // 监听滚动，检测预览区域是否处于 sticky 状态
+  useEffect(() => {
+    const scrollable = scrollableRef.current
+    if (!scrollable) return
+
+    const handleScroll = () => {
+      // 当滚动距离大于 0 时，预览区域处于 sticky 状态
+      setIsSticky(scrollable.scrollTop > 0)
+    }
+
+    // 初始检查
+    handleScroll()
+
+    scrollable.addEventListener('scroll', handleScroll)
+    return () => {
+      scrollable.removeEventListener('scroll', handleScroll)
+    }
+  }, [])
+
   return (
     <div class={styles['plugin-container']}>
       {/* 可滚动内容区域 */}
       <div class={styles['scrollable-content']} ref={scrollableRef}>
         {/* 预览区域（包含选项卡） */}
-        <div class={styles['preview-section']}>
+        <div class={`${styles['preview-section']} ${isSticky ? styles['preview-section--sticky'] : ''}`}>
           {/* 选项卡切换 */}
           <div class={styles['mode-tabs']}>
             <button
               class={`${styles['mode-tab']} ${currentMode === 'layer' ? styles['mode-tab--active'] : ''}`}
-              onClick={() => { setCurrentMode('layer'); setHasAutoFilled(false); setHasManuallyEditedName(false) }}
+              onClick={() => { setCurrentMode('layer'); setHasAutoFilled(false); setHasManuallyEditedName(false); hasManuallyEditedNameRef.current = false }}
               type="button"
             >
               图层命名
             </button>
             <button
               class={`${styles['mode-tab']} ${currentMode === 'export' ? styles['mode-tab--active'] : ''}`}
-              onClick={() => { setCurrentMode('export'); setHasAutoFilled(false); setHasManuallyEditedName(false) }}
+              onClick={() => { setCurrentMode('export'); setHasAutoFilled(false); setHasManuallyEditedName(false); hasManuallyEditedNameRef.current = false }}
               type="button"
             >
               切图命名
@@ -591,29 +625,29 @@ function Plugin() {
           {/* 快捷词标签 */}
           <div class={styles['quick-tags']}>
             {/* 原有标签 */}
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('container')} type="button">container</button>
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('icon')} type="button">icon</button>
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('title')} type="button">title</button>
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('text')} type="button">text</button>
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('item')} type="button">item</button>
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('description')} type="button">description</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'container' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'container' ? '' : 'container'); } }} type="button">container</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'icon' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'icon' ? '' : 'icon'); } }} type="button">icon</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'title' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'title' ? '' : 'title'); } }} type="button">title</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'text' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'text' ? '' : 'text'); } }} type="button">text</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'item' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'item' ? '' : 'item'); } }} type="button">item</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'description' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'description' ? '' : 'description'); } }} type="button">description</button>
 
             {/* UI 组件类型 */}
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('button')} type="button">button</button>
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('card')} type="button">card</button>
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('modal')} type="button">modal</button>
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('input')} type="button">input</button>
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('list')} type="button">list</button>
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('table')} type="button">table</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'button' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'button' ? '' : 'button'); } }} type="button">button</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'card' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'card' ? '' : 'card'); } }} type="button">card</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'modal' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'modal' ? '' : 'modal'); } }} type="button">modal</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'input' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'input' ? '' : 'input'); } }} type="button">input</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'list' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'list' ? '' : 'list'); } }} type="button">list</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'table' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'table' ? '' : 'table'); } }} type="button">table</button>
 
             {/* 内容元素 */}
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('image')} type="button">image</button>
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('avatar')} type="button">avatar</button>
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('link')} type="button">link</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'image' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'image' ? '' : 'image'); } }} type="button">image</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'avatar' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'avatar' ? '' : 'avatar'); } }} type="button">avatar</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'link' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'link' ? '' : 'link'); } }} type="button">link</button>
 
             {/* 交互元素 */}
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('checkbox')} type="button">checkbox</button>
-            <button class={styles['quick-tag']} onClick={() => setRenameValue('tabs')} type="button">tabs</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'checkbox' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'checkbox' ? '' : 'checkbox'); } }} type="button">checkbox</button>
+            <button class={`${styles['quick-tag']} ${renameValue === 'tabs' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setRenameValue(renameValue === 'tabs' ? '' : 'tabs'); } }} type="button">tabs</button>
           </div>
         </div>
 
@@ -627,11 +661,16 @@ function Plugin() {
               backgroundColor: showPrefix ? '#FF77E7' : 'rgba(27, 27, 27, 0.16)',
               borderRadius: '48px',
               position: 'relative',
-              cursor: 'pointer',
+              cursor: selectionCount === 0 ? 'not-allowed' : 'pointer',
               flexShrink: 0,
-              transition: 'background-color 0.2s ease'
+              transition: 'background-color 0.2s ease',
+              opacity: selectionCount === 0 ? 0.5 : 1
             }}
             onClick={() => {
+              if (selectionCount === 0) {
+                showToastMessage('请先选中图层')
+                return
+              }
               const newValue = !showPrefix
               setShowPrefix(newValue)
               // 如果打开开关，延迟滚动到前缀输入框可见区域（包含快捷词）
@@ -740,11 +779,16 @@ function Plugin() {
               backgroundColor: showSuffix ? '#FF77E7' : 'rgba(27, 27, 27, 0.16)',
               borderRadius: '48px',
               position: 'relative',
-              cursor: 'pointer',
+              cursor: selectionCount === 0 ? 'not-allowed' : 'pointer',
               flexShrink: 0,
-              transition: 'background-color 0.2s ease'
+              transition: 'background-color 0.2s ease',
+              opacity: selectionCount === 0 ? 0.5 : 1
             }}
             onClick={() => {
+              if (selectionCount === 0) {
+                showToastMessage('请先选中图层')
+                return
+              }
               const newValue = !showSuffix
               setShowSuffix(newValue)
               // 如果打开开关，延迟滚动到后缀输入框可见区域（包含快捷词）
@@ -949,18 +993,17 @@ function Plugin() {
             <div class={styles['form-group']}>
               <label class={styles['form-label']}>名称/功能</label>
               <div class={styles['input-with-clear']}>
-                <Textbox
-                  onValueInput={(value) => {
-                    setExportName(value)
-                    // 检测用户是否手动编辑了名称
-                    if (value !== selectedLayerName) {
-                      setHasManuallyEditedName(true)
-                    } else {
-                      setHasManuallyEditedName(false)
-                    }
+                {/* 暂时用原生 input 测试 */}
+                <input
+                  type="text"
+                  onInput={(e) => {
+                    setExportName((e.target as HTMLInputElement).value)
+                    hasManuallyEditedNameRef.current = true
+                    setHasManuallyEditedName(true)
                   }}
                   placeholder="请输入名称/功能"
                   value={exportName}
+                  class={styles['textbox-custom']}
                 />
                 {exportName && (
                   <button
@@ -982,32 +1025,32 @@ function Plugin() {
                 )}
               </div>
               <div class={styles['quick-tags']}>
-                <button class={`${styles['quick-tag']} ${exportName === 'arrow' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('arrow'); setHasManuallyEditedName(true); setHasAutoFilled(false); }} type="button">arrow</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'label' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('label'); setHasManuallyEditedName(true); }} type="button">label</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'mask' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('mask'); setHasManuallyEditedName(true); }} type="button">mask</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'bg' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('bg'); setHasManuallyEditedName(true); }} type="button">bg</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'btn' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('btn'); setHasManuallyEditedName(true); }} type="button">btn</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'index' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('index'); setHasManuallyEditedName(true); }} type="button">index</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'search' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('search'); setHasManuallyEditedName(true); }} type="button">search</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'itemlist' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('itemlist'); setHasManuallyEditedName(true); }} type="button">itemlist</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'itemdetail' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('itemdetail'); setHasManuallyEditedName(true); }} type="button">itemdetail</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'shoppingcart' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('shoppingcart'); setHasManuallyEditedName(true); }} type="button">shoppingcart</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'pay' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('pay'); setHasManuallyEditedName(true); }} type="button">pay</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'order' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('order'); setHasManuallyEditedName(true); }} type="button">order</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'account' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('account'); setHasManuallyEditedName(true); }} type="button">account</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'myfavor' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('myfavor'); setHasManuallyEditedName(true); }} type="button">myfavor</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'login' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('login'); setHasManuallyEditedName(true); }} type="button">login</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'share' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('share'); setHasManuallyEditedName(true); }} type="button">share</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'popup' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('popup'); setHasManuallyEditedName(true); }} type="button">popup</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'banner' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('banner'); setHasManuallyEditedName(true); }} type="button">banner</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'delete' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('delete'); setHasManuallyEditedName(true); }} type="button">delete</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'loading' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('loading'); setHasManuallyEditedName(true); }} type="button">loading</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'sort' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('sort'); setHasManuallyEditedName(true); }} type="button">sort</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'close' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('close'); setHasManuallyEditedName(true); }} type="button">close</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'add' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('add'); setHasManuallyEditedName(true); }} type="button">add</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'collect' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('collect'); setHasManuallyEditedName(true); }} type="button">collect</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'refresh' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('refresh'); setHasManuallyEditedName(true); }} type="button">refresh</button>
-                <button class={`${styles['quick-tag']} ${exportName === 'filter' ? styles['quick-tag--selected'] : ''}`} onClick={() => { setExportName('filter'); setHasManuallyEditedName(true); }} type="button">filter</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'arrow' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'arrow' ? '' : 'arrow'); setHasManuallyEditedName(true); } }} type="button">arrow</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'label' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'label' ? '' : 'label'); setHasManuallyEditedName(true); } }} type="button">label</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'mask' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'mask' ? '' : 'mask'); setHasManuallyEditedName(true); } }} type="button">mask</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'bg' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'bg' ? '' : 'bg'); setHasManuallyEditedName(true); } }} type="button">bg</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'btn' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'btn' ? '' : 'btn'); setHasManuallyEditedName(true); } }} type="button">btn</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'index' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'index' ? '' : 'index'); setHasManuallyEditedName(true); } }} type="button">index</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'search' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'search' ? '' : 'search'); setHasManuallyEditedName(true); } }} type="button">search</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'itemlist' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'itemlist' ? '' : 'itemlist'); setHasManuallyEditedName(true); } }} type="button">itemlist</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'itemdetail' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'itemdetail' ? '' : 'itemdetail'); setHasManuallyEditedName(true); } }} type="button">itemdetail</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'shoppingcart' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'shoppingcart' ? '' : 'shoppingcart'); setHasManuallyEditedName(true); } }} type="button">shoppingcart</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'pay' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'pay' ? '' : 'pay'); setHasManuallyEditedName(true); } }} type="button">pay</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'order' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'order' ? '' : 'order'); setHasManuallyEditedName(true); } }} type="button">order</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'account' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'account' ? '' : 'account'); setHasManuallyEditedName(true); } }} type="button">account</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'myfavor' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'myfavor' ? '' : 'myfavor'); setHasManuallyEditedName(true); } }} type="button">myfavor</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'login' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'login' ? '' : 'login'); setHasManuallyEditedName(true); } }} type="button">login</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'share' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'share' ? '' : 'share'); setHasManuallyEditedName(true); } }} type="button">share</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'popup' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'popup' ? '' : 'popup'); setHasManuallyEditedName(true); } }} type="button">popup</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'banner' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'banner' ? '' : 'banner'); setHasManuallyEditedName(true); } }} type="button">banner</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'delete' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'delete' ? '' : 'delete'); setHasManuallyEditedName(true); } }} type="button">delete</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'loading' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'loading' ? '' : 'loading'); setHasManuallyEditedName(true); } }} type="button">loading</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'sort' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'sort' ? '' : 'sort'); setHasManuallyEditedName(true); } }} type="button">sort</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'close' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'close' ? '' : 'close'); setHasManuallyEditedName(true); } }} type="button">close</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'add' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'add' ? '' : 'add'); setHasManuallyEditedName(true); } }} type="button">add</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'collect' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'collect' ? '' : 'collect'); setHasManuallyEditedName(true); } }} type="button">collect</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'refresh' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'refresh' ? '' : 'refresh'); setHasManuallyEditedName(true); } }} type="button">refresh</button>
+                <button class={`${styles['quick-tag']} ${exportName === 'filter' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportName(exportName === 'filter' ? '' : 'filter'); setHasManuallyEditedName(true); } }} type="button">filter</button>
               </div>
             </div>
 
@@ -1015,8 +1058,8 @@ function Plugin() {
             <div class={styles['form-group']}>
               <label class={styles['form-label']}>图标/图片</label>
               <div class={styles['quick-tags']}>
-                <button class={`${styles['quick-tag']} ${exportType === 'icon' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportType(exportType === 'icon' ? '' : 'icon')} type="button">icon</button>
-                <button class={`${styles['quick-tag']} ${exportType === 'pic' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportType(exportType === 'pic' ? '' : 'pic')} type="button">pic</button>
+                <button class={`${styles['quick-tag']} ${exportType === 'icon' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportType(exportType === 'icon' ? '' : 'icon') } }} type="button">icon</button>
+                <button class={`${styles['quick-tag']} ${exportType === 'pic' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportType(exportType === 'pic' ? '' : 'pic') } }} type="button">pic</button>
               </div>
             </div>
 
@@ -1024,9 +1067,9 @@ function Plugin() {
             <div class={styles['form-group']}>
               <label class={styles['form-label']}>风格</label>
               <div class={styles['quick-tags']}>
-                <button class={`${styles['quick-tag']} ${exportStyle === 'line' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportStyle(exportStyle === 'line' ? '' : 'line')} type="button">line</button>
-                <button class={`${styles['quick-tag']} ${exportStyle === 'planarity' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportStyle(exportStyle === 'planarity' ? '' : 'planarity')} type="button">planarity</button>
-                <button class={`${styles['quick-tag']} ${exportStyle === 'color' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportStyle(exportStyle === 'color' ? '' : 'color')} type="button">color</button>
+                <button class={`${styles['quick-tag']} ${exportStyle === 'line' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportStyle(exportStyle === 'line' ? '' : 'line') } }} type="button">line</button>
+                <button class={`${styles['quick-tag']} ${exportStyle === 'planarity' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportStyle(exportStyle === 'planarity' ? '' : 'planarity') } }} type="button">planarity</button>
+                <button class={`${styles['quick-tag']} ${exportStyle === 'color' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportStyle(exportStyle === 'color' ? '' : 'color') } }} type="button">color</button>
               </div>
             </div>
 
@@ -1034,11 +1077,11 @@ function Plugin() {
             <div class={styles['form-group']}>
               <label class={styles['form-label']}>类型</label>
               <div class={styles['quick-tags']}>
-                <button class={`${styles['quick-tag']} ${exportCategory === 'direction' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportCategory(exportCategory === 'direction' ? '' : 'direction')} type="button">direction</button>
-                <button class={`${styles['quick-tag']} ${exportCategory === 'edit' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportCategory(exportCategory === 'edit' ? '' : 'edit')} type="button">edit</button>
-                <button class={`${styles['quick-tag']} ${exportCategory === 'alert' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportCategory(exportCategory === 'alert' ? '' : 'alert')} type="button">alert</button>
-                <button class={`${styles['quick-tag']} ${exportCategory === 'generality' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportCategory(exportCategory === 'generality' ? '' : 'generality')} type="button">generality</button>
-                <button class={`${styles['quick-tag']} ${exportCategory === 'column' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportCategory(exportCategory === 'column' ? '' : 'column')} type="button">column</button>
+                <button class={`${styles['quick-tag']} ${exportCategory === 'direction' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportCategory(exportCategory === 'direction' ? '' : 'direction') } }} type="button">direction</button>
+                <button class={`${styles['quick-tag']} ${exportCategory === 'edit' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportCategory(exportCategory === 'edit' ? '' : 'edit') } }} type="button">edit</button>
+                <button class={`${styles['quick-tag']} ${exportCategory === 'alert' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportCategory(exportCategory === 'alert' ? '' : 'alert') } }} type="button">alert</button>
+                <button class={`${styles['quick-tag']} ${exportCategory === 'generality' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportCategory(exportCategory === 'generality' ? '' : 'generality') } }} type="button">generality</button>
+                <button class={`${styles['quick-tag']} ${exportCategory === 'column' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportCategory(exportCategory === 'column' ? '' : 'column') } }} type="button">column</button>
               </div>
             </div>
 
@@ -1109,22 +1152,22 @@ function Plugin() {
                   )}
                 </div>
                 <div class={styles['quick-tags']}>
-                  <button class={`${styles['quick-tag']} ${exportState === 'up' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportState(exportState === 'up' ? '' : 'up')} type="button">up</button>
-                  <button class={`${styles['quick-tag']} ${exportState === 'down' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportState(exportState === 'down' ? '' : 'down')} type="button">down</button>
-                  <button class={`${styles['quick-tag']} ${exportState === 'left' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportState(exportState === 'left' ? '' : 'left')} type="button">left</button>
-                  <button class={`${styles['quick-tag']} ${exportState === 'right' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportState(exportState === 'right' ? '' : 'right')} type="button">right</button>
-                  <button class={`${styles['quick-tag']} ${exportState === 'top' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportState(exportState === 'top' ? '' : 'top')} type="button">top</button>
-                  <button class={`${styles['quick-tag']} ${exportState === 'bottom' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportState(exportState === 'bottom' ? '' : 'bottom')} type="button">bottom</button>
-                  <button class={`${styles['quick-tag']} ${exportState === 'center' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportState(exportState === 'center' ? '' : 'center')} type="button">center</button>
-                  <button class={`${styles['quick-tag']} ${exportState === 'normal' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportState(exportState === 'normal' ? '' : 'normal')} type="button">normal</button>
-                  <button class={`${styles['quick-tag']} ${exportState === 'selected' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportState(exportState === 'selected' ? '' : 'selected')} type="button">selected</button>
-                  <button class={`${styles['quick-tag']} ${exportState === 'disabled' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportState(exportState === 'disabled' ? '' : 'disabled')} type="button">disabled</button>
-                  <button class={`${styles['quick-tag']} ${exportState === 'pressed' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportState(exportState === 'pressed' ? '' : 'pressed')} type="button">pressed</button>
-                  <button class={`${styles['quick-tag']} ${exportState === 'slide' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportState(exportState === 'slide' ? '' : 'slide')} type="button">slide</button>
-                  <button class={`${styles['quick-tag']} ${exportState === 'error' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportState(exportState === 'error' ? '' : 'error')} type="button">error</button>
-                  <button class={`${styles['quick-tag']} ${exportState === 'success' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportState(exportState === 'success' ? '' : 'success')} type="button">success</button>
-                  <button class={`${styles['quick-tag']} ${exportState === 'complete' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportState(exportState === 'complete' ? '' : 'complete')} type="button">complete</button>
-                  <button class={`${styles['quick-tag']} ${exportState === 'blank' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportState(exportState === 'blank' ? '' : 'blank')} type="button">blank</button>
+                  <button class={`${styles['quick-tag']} ${exportState === 'up' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportState(exportState === 'up' ? '' : 'up') } }} type="button">up</button>
+                  <button class={`${styles['quick-tag']} ${exportState === 'down' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportState(exportState === 'down' ? '' : 'down') } }} type="button">down</button>
+                  <button class={`${styles['quick-tag']} ${exportState === 'left' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportState(exportState === 'left' ? '' : 'left') } }} type="button">left</button>
+                  <button class={`${styles['quick-tag']} ${exportState === 'right' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportState(exportState === 'right' ? '' : 'right') } }} type="button">right</button>
+                  <button class={`${styles['quick-tag']} ${exportState === 'top' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportState(exportState === 'top' ? '' : 'top') } }} type="button">top</button>
+                  <button class={`${styles['quick-tag']} ${exportState === 'bottom' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportState(exportState === 'bottom' ? '' : 'bottom') } }} type="button">bottom</button>
+                  <button class={`${styles['quick-tag']} ${exportState === 'center' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportState(exportState === 'center' ? '' : 'center') } }} type="button">center</button>
+                  <button class={`${styles['quick-tag']} ${exportState === 'normal' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportState(exportState === 'normal' ? '' : 'normal') } }} type="button">normal</button>
+                  <button class={`${styles['quick-tag']} ${exportState === 'selected' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportState(exportState === 'selected' ? '' : 'selected') } }} type="button">selected</button>
+                  <button class={`${styles['quick-tag']} ${exportState === 'disabled' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportState(exportState === 'disabled' ? '' : 'disabled') } }} type="button">disabled</button>
+                  <button class={`${styles['quick-tag']} ${exportState === 'pressed' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportState(exportState === 'pressed' ? '' : 'pressed') } }} type="button">pressed</button>
+                  <button class={`${styles['quick-tag']} ${exportState === 'slide' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportState(exportState === 'slide' ? '' : 'slide') } }} type="button">slide</button>
+                  <button class={`${styles['quick-tag']} ${exportState === 'error' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportState(exportState === 'error' ? '' : 'error') } }} type="button">error</button>
+                  <button class={`${styles['quick-tag']} ${exportState === 'success' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportState(exportState === 'success' ? '' : 'success') } }} type="button">success</button>
+                  <button class={`${styles['quick-tag']} ${exportState === 'complete' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportState(exportState === 'complete' ? '' : 'complete') } }} type="button">complete</button>
+                  <button class={`${styles['quick-tag']} ${exportState === 'blank' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportState(exportState === 'blank' ? '' : 'blank') } }} type="button">blank</button>
                 </div>
               </div>
             )}
@@ -1196,16 +1239,16 @@ function Plugin() {
                   )}
                 </div>
                 <div class={styles['quick-tags']}>
-                  <button class={`${styles['quick-tag']} ${exportColor === 'black' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportColor(exportColor === 'black' ? '' : 'black')} type="button">black</button>
-                  <button class={`${styles['quick-tag']} ${exportColor === 'darkgrey' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportColor(exportColor === 'darkgrey' ? '' : 'darkgrey')} type="button">darkgrey</button>
-                  <button class={`${styles['quick-tag']} ${exportColor === 'lightgrey' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportColor(exportColor === 'lightgrey' ? '' : 'lightgrey')} type="button">lightgrey</button>
-                  <button class={`${styles['quick-tag']} ${exportColor === 'brand5' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportColor(exportColor === 'brand5' ? '' : 'brand5')} type="button">brand5</button>
-                  <button class={`${styles['quick-tag']} ${exportColor === 'red' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportColor(exportColor === 'red' ? '' : 'red')} type="button">red</button>
-                  <button class={`${styles['quick-tag']} ${exportColor === 'blue' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportColor(exportColor === 'blue' ? '' : 'blue')} type="button">blue</button>
-                  <button class={`${styles['quick-tag']} ${exportColor === 'orange' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportColor(exportColor === 'orange' ? '' : 'orange')} type="button">orange</button>
-                  <button class={`${styles['quick-tag']} ${exportColor === 'green' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportColor(exportColor === 'green' ? '' : 'green')} type="button">green</button>
-                  <button class={`${styles['quick-tag']} ${exportColor === 'purple' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportColor(exportColor === 'purple' ? '' : 'purple')} type="button">purple</button>
-                  <button class={`${styles['quick-tag']} ${exportColor === 'white' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportColor(exportColor === 'white' ? '' : 'white')} type="button">white</button>
+                  <button class={`${styles['quick-tag']} ${exportColor === 'black' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportColor(exportColor === 'black' ? '' : 'black') } }} type="button">black</button>
+                  <button class={`${styles['quick-tag']} ${exportColor === 'darkgrey' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportColor(exportColor === 'darkgrey' ? '' : 'darkgrey') } }} type="button">darkgrey</button>
+                  <button class={`${styles['quick-tag']} ${exportColor === 'lightgrey' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportColor(exportColor === 'lightgrey' ? '' : 'lightgrey') } }} type="button">lightgrey</button>
+                  <button class={`${styles['quick-tag']} ${exportColor === 'brand5' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportColor(exportColor === 'brand5' ? '' : 'brand5') } }} type="button">brand5</button>
+                  <button class={`${styles['quick-tag']} ${exportColor === 'red' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportColor(exportColor === 'red' ? '' : 'red') } }} type="button">red</button>
+                  <button class={`${styles['quick-tag']} ${exportColor === 'blue' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportColor(exportColor === 'blue' ? '' : 'blue') } }} type="button">blue</button>
+                  <button class={`${styles['quick-tag']} ${exportColor === 'orange' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportColor(exportColor === 'orange' ? '' : 'orange') } }} type="button">orange</button>
+                  <button class={`${styles['quick-tag']} ${exportColor === 'green' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportColor(exportColor === 'green' ? '' : 'green') } }} type="button">green</button>
+                  <button class={`${styles['quick-tag']} ${exportColor === 'purple' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportColor(exportColor === 'purple' ? '' : 'purple') } }} type="button">purple</button>
+                  <button class={`${styles['quick-tag']} ${exportColor === 'white' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportColor(exportColor === 'white' ? '' : 'white') } }} type="button">white</button>
                 </div>
               </div>
             )}
@@ -1277,13 +1320,13 @@ function Plugin() {
                   )}
                 </div>
                 <div class={styles['quick-tags']}>
-                  <button class={`${styles['quick-tag']} ${exportSize === '8' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportSize(exportSize === '8' ? '' : '8')} type="button">8</button>
-                  <button class={`${styles['quick-tag']} ${exportSize === '12' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportSize(exportSize === '12' ? '' : '12')} type="button">12</button>
-                  <button class={`${styles['quick-tag']} ${exportSize === '14' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportSize(exportSize === '14' ? '' : '14')} type="button">14</button>
-                  <button class={`${styles['quick-tag']} ${exportSize === '16' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportSize(exportSize === '16' ? '' : '16')} type="button">16</button>
-                  <button class={`${styles['quick-tag']} ${exportSize === '18' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportSize(exportSize === '18' ? '' : '18')} type="button">18</button>
-                  <button class={`${styles['quick-tag']} ${exportSize === '24' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportSize(exportSize === '24' ? '' : '24')} type="button">24</button>
-                  <button class={`${styles['quick-tag']} ${exportSize === '32' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportSize(exportSize === '32' ? '' : '32')} type="button">32</button>
+                  <button class={`${styles['quick-tag']} ${exportSize === '8' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportSize(exportSize === '8' ? '' : '8') } }} type="button">8</button>
+                  <button class={`${styles['quick-tag']} ${exportSize === '12' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportSize(exportSize === '12' ? '' : '12') } }} type="button">12</button>
+                  <button class={`${styles['quick-tag']} ${exportSize === '14' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportSize(exportSize === '14' ? '' : '14') } }} type="button">14</button>
+                  <button class={`${styles['quick-tag']} ${exportSize === '16' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportSize(exportSize === '16' ? '' : '16') } }} type="button">16</button>
+                  <button class={`${styles['quick-tag']} ${exportSize === '18' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportSize(exportSize === '18' ? '' : '18') } }} type="button">18</button>
+                  <button class={`${styles['quick-tag']} ${exportSize === '24' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportSize(exportSize === '24' ? '' : '24') } }} type="button">24</button>
+                  <button class={`${styles['quick-tag']} ${exportSize === '32' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportSize(exportSize === '32' ? '' : '32') } }} type="button">32</button>
                 </div>
               </div>
             )}
@@ -1355,14 +1398,14 @@ function Plugin() {
                   )}
                 </div>
                 <div class={styles['quick-tags']}>
-                  <button class={`${styles['quick-tag']} ${exportOpacity === '4%' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportOpacity(exportOpacity === '4%' ? '' : '4%')} type="button">4%</button>
-                  <button class={`${styles['quick-tag']} ${exportOpacity === '8%' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportOpacity(exportOpacity === '8%' ? '' : '8%')} type="button">8%</button>
-                  <button class={`${styles['quick-tag']} ${exportOpacity === '16%' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportOpacity(exportOpacity === '16%' ? '' : '16%')} type="button">16%</button>
-                  <button class={`${styles['quick-tag']} ${exportOpacity === '24%' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportOpacity(exportOpacity === '24%' ? '' : '24%')} type="button">24%</button>
-                  <button class={`${styles['quick-tag']} ${exportOpacity === '50%' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportOpacity(exportOpacity === '50%' ? '' : '50%')} type="button">50%</button>
-                  <button class={`${styles['quick-tag']} ${exportOpacity === '60%' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportOpacity(exportOpacity === '60%' ? '' : '60%')} type="button">60%</button>
-                  <button class={`${styles['quick-tag']} ${exportOpacity === '85%' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportOpacity(exportOpacity === '85%' ? '' : '85%')} type="button">85%</button>
-                  <button class={`${styles['quick-tag']} ${exportOpacity === '95%' ? styles['quick-tag--selected'] : ''}`} onClick={() => setExportOpacity(exportOpacity === '95%' ? '' : '95%')} type="button">95%</button>
+                  <button class={`${styles['quick-tag']} ${exportOpacity === '4%' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportOpacity(exportOpacity === '4%' ? '' : '4%') } }} type="button">4%</button>
+                  <button class={`${styles['quick-tag']} ${exportOpacity === '8%' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportOpacity(exportOpacity === '8%' ? '' : '8%') } }} type="button">8%</button>
+                  <button class={`${styles['quick-tag']} ${exportOpacity === '16%' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportOpacity(exportOpacity === '16%' ? '' : '16%') } }} type="button">16%</button>
+                  <button class={`${styles['quick-tag']} ${exportOpacity === '24%' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportOpacity(exportOpacity === '24%' ? '' : '24%') } }} type="button">24%</button>
+                  <button class={`${styles['quick-tag']} ${exportOpacity === '50%' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportOpacity(exportOpacity === '50%' ? '' : '50%') } }} type="button">50%</button>
+                  <button class={`${styles['quick-tag']} ${exportOpacity === '60%' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportOpacity(exportOpacity === '60%' ? '' : '60%') } }} type="button">60%</button>
+                  <button class={`${styles['quick-tag']} ${exportOpacity === '85%' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportOpacity(exportOpacity === '85%' ? '' : '85%') } }} type="button">85%</button>
+                  <button class={`${styles['quick-tag']} ${exportOpacity === '95%' ? styles['quick-tag--selected'] : ''}`} onClick={() => { if (selectionCount === 0) { showToastMessage('请先选中图层') } else { setExportOpacity(exportOpacity === '95%' ? '' : '95%') } }} type="button">95%</button>
                 </div>
               </div>
             )}
@@ -1377,11 +1420,18 @@ function Plugin() {
                   backgroundColor: useYoungPrefix ? '#FF77E7' : 'rgba(27, 27, 27, 0.16)',
                   borderRadius: '48px',
                   position: 'relative',
-                  cursor: 'pointer',
+                  cursor: selectionCount === 0 ? 'not-allowed' : 'pointer',
                   flexShrink: 0,
-                  transition: 'background-color 0.2s ease'
+                  transition: 'background-color 0.2s ease',
+                  opacity: selectionCount === 0 ? 0.5 : 1
                 }}
-                onClick={() => setUseYoungPrefix(!useYoungPrefix)}
+                onClick={() => {
+                  if (selectionCount === 0) {
+                    showToastMessage('请先选中图层')
+                    return
+                  }
+                  setUseYoungPrefix(!useYoungPrefix)
+                }}
               >
                 <span
                   style={{
@@ -1410,11 +1460,18 @@ function Plugin() {
                   backgroundColor: useDarkMode ? '#FF77E7' : 'rgba(27, 27, 27, 0.16)',
                   borderRadius: '48px',
                   position: 'relative',
-                  cursor: 'pointer',
+                  cursor: selectionCount === 0 ? 'not-allowed' : 'pointer',
                   flexShrink: 0,
-                  transition: 'background-color 0.2s ease'
+                  transition: 'background-color 0.2s ease',
+                  opacity: selectionCount === 0 ? 0.5 : 1
                 }}
-                onClick={() => setUseDarkMode(!useDarkMode)}
+                onClick={() => {
+                  if (selectionCount === 0) {
+                    showToastMessage('请先选中图层')
+                    return
+                  }
+                  setUseDarkMode(!useDarkMode)
+                }}
               >
                 <span
                   style={{

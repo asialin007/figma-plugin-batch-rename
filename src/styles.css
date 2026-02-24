@@ -32,7 +32,8 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: var(--yds-spacing-24) var(--yds-spacing-16);
+  /* 移除顶部 padding，改为添加到预览区域 */
+  padding: 0 var(--yds-spacing-16) var(--yds-spacing-24);
   /* 隐藏滚动条 */
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE 10+ */
@@ -212,38 +213,29 @@
 
 /* ==================== 预览区域 ==================== */
 .preview-section {
+  /* 添加顶部 padding，替代 scrollable-content 的顶部 padding */
+  padding-top: var(--yds-spacing-24);
+  padding-bottom: var(--yds-spacing-8);
   /* 向上偏移，但不完全抵消，保持适当间距 */
   margin-top: calc(var(--yds-spacing-12) * -1);
   margin-bottom: var(--yds-spacing-16);
   position: sticky;
   top: 0;
-  z-index: 100; /* 提高层级，确保在所有其他元素之上 */
-  padding: var(--yds-spacing-16);
+  z-index: 100; /* 确保在所有表单内容之上，包括负边距元素 */
+  padding-left: var(--yds-spacing-16);
+  padding-right: var(--yds-spacing-16);
 
   /* 让描边拉通到容器边缘 */
   margin-left: calc(var(--yds-spacing-16) * -1); /* 抵消父容器的 padding (-16px) */
   margin-right: calc(var(--yds-spacing-16) * -1);
 
-  /* 确保预览区域创建独立的堆叠上下文 */
-  isolation: isolate;
-
   /* 白色背景直接设置在元素上 */
   background-color: var(--yds-color-neutral-white);
 }
 
-/* 使用伪元素扩展背景，遮挡滚动时上来的内容 */
-.preview-section::before {
-  content: '';
-  position: absolute;
-  /* 向四周扩展，覆盖滚动容器 padding 和负 margin 区域 */
-  left: calc(var(--yds-spacing-16) * -1);
-  right: calc(var(--yds-spacing-16) * -1);
-  top: calc(var(--yds-spacing-24) * -1);
-  bottom: 0;
-  background-color: var(--yds-color-neutral-white);
-  z-index: -1;
-  display: block;
-  pointer-events: none;
+/* 滚动时显示底部分割线 */
+.preview-section--sticky {
+  border-bottom: 0.5px solid var(--yds-border-color);
 }
 
 /* 滚动时不再显示底部描边 */
@@ -251,12 +243,15 @@
 
 .preview-box {
   background-color: var(--yds-color-neutral-gray);
-  border: 1px solid var(--yds-border-color);
+  border: none;
   border-radius: var(--yds-radius-none);
-  padding: var(--yds-spacing-12);
+  /* 内部 padding */
+  padding: var(--yds-spacing-16);
   overflow: hidden;
   width: 100%;
   box-sizing: border-box;
+  /* 距离容器底部 8px */
+  margin-bottom: var(--yds-spacing-8);
 }
 
 .preview-label {
@@ -561,7 +556,6 @@
   transition: all 0.2s ease;
   padding: 0;
   flex-shrink: 0;
-  z-index: 50; /* 在预览区域之下，但在输入框之上 */
   /* 移除所有 focus 样式 */
   outline: none !important;
 }
@@ -615,7 +609,6 @@
   transition: all 0.2s ease;
   padding: 0;
   flex-shrink: 0;
-  z-index: 50; /* 在预览区域之下，但在输入框之上 */
 }
 
 .clear-button svg {
@@ -664,9 +657,6 @@ textarea,
   box-sizing: border-box !important;
   /* 确保输入框宽度填满容器 */
   width: 100% !important;
-  /* 确保输入框不会遮挡清空按钮 */
-  position: relative !important;
-  z-index: 1 !important;
 }
 
 input[type="text"]:focus,
