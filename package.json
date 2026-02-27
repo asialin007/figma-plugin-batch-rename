@@ -1,4 +1,9 @@
 {
+  "name": "batch-rename-figma-plugin",
+  "version": "1.0.0",
+  "description": "批量重命名 Figma 图层，支持前缀、后缀、自动编号及专业切图命名规范",
+  "author": "Asialin",
+  "license": "MIT",
   "dependencies": {
     "@create-figma-plugin/ui": "^4.0.3",
     "@create-figma-plugin/utilities": "^4.0.3",
@@ -15,7 +20,10 @@
   },
   "scripts": {
     "build": "build-figma-plugin --typecheck --minify",
-    "watch": "build-figma-plugin --typecheck --watch"
+    "watch": "build-figma-plugin --typecheck --watch",
+    "version:patch": "./bump-version.sh patch",
+    "version:minor": "./bump-version.sh minor",
+    "version:major": "./bump-version.sh major"
   },
   "figma-plugin": {
     "editorType": [

@@ -57,11 +57,20 @@
   text-align: center;
 }
 
+/* ==================== 预览区域头部 ==================== */
+.preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--yds-spacing-12);
+  margin-bottom: var(--yds-spacing-12);
+}
+
 /* ==================== 选项卡切换 ==================== */
 .mode-tabs {
   display: flex;
   gap: 0;
-  margin-bottom: var(--yds-spacing-12);
+  flex: 1;
   background-color: var(--yds-color-neutral-gray);
   border-radius: var(--yds-radius-none);
   padding: 4px;
@@ -102,6 +111,88 @@
   color: var(--yds-text-primary) !important;
 }
 
+/* ==================== 语言选择器 ==================== */
+.language-selector {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.language-button {
+  display: flex;
+  align-items: center;
+  gap: var(--yds-spacing-4);
+  padding: var(--yds-spacing-8) var(--yds-spacing-12);
+  background-color: var(--yds-color-neutral-gray);
+  border: none;
+  border-radius: var(--yds-radius-none);
+  font-family: var(--yds-font-family-base);
+  font-size: var(--yds-font-size-13);
+  font-weight: var(--yds-font-weight-medium);
+  color: var(--yds-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: none;
+  min-width: 72px;
+  justify-content: center;
+}
+
+.language-button:hover {
+  color: var(--yds-text-primary);
+}
+
+.language-button svg {
+  width: 12px;
+  height: 12px;
+  transition: transform 0.2s ease;
+}
+
+.language-button--open svg {
+  transform: rotate(180deg);
+}
+
+.language-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: var(--yds-spacing-4);
+  padding: var(--yds-spacing-8);
+  background-color: var(--yds-color-neutral-white);
+  border: 1px solid var(--yds-border-color);
+  border-radius: var(--yds-radius-none);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 200;
+  min-width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--yds-spacing-4);
+}
+
+.language-option {
+  display: block;
+  width: 100%;
+  padding: var(--yds-spacing-10) var(--yds-spacing-12);
+  background-color: transparent;
+  border: none;
+  font-family: var(--yds-font-family-base);
+  font-size: var(--yds-font-size-13);
+  font-weight: var(--yds-font-weight-medium);
+  color: var(--yds-text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+  box-shadow: none;
+}
+
+.language-option:hover {
+  color: var(--yds-text-primary);
+}
+
+.language-option--selected {
+  color: var(--yds-color-brand-primary);
+  background-color: transparent;
+}
+
 /* 选中状态的快捷标签样式 */
 .quick-tag--selected {
   background-color: var(--yds-bg-default-black, #1B1B1B);
@@ -111,6 +202,23 @@
 .quick-tag--selected:hover {
   background-color: var(--yds-bg-default-black, #1B1B1B);
   color: #FFFFFF;
+}
+
+/* ==================== 快捷词分组标题 ==================== */
+.quick-tag-group-title {
+  display: block;
+  width: 100%;
+  font-family: var(--yds-font-family-base);
+  font-size: var(--yds-font-size-11);
+  font-weight: var(--yds-font-weight-medium);
+  color: var(--yds-text-tertiary);
+  margin-top: var(--yds-spacing-8);
+  margin-bottom: var(--yds-spacing-4);
+}
+
+/* 第一个分组标题不需要上边距 */
+.quick-tag-group-title:first-child {
+  margin-top: 0;
 }
 
 /* 预览区域复制按钮 */
@@ -503,6 +611,7 @@
 .textbox-custom {
   width: 100%;
   padding: var(--yds-spacing-12) var(--yds-spacing-12);
+  padding-right: 44px;  /* 为删除按钮留出空间 */
   border: 1px solid var(--yds-border-color);
   border-radius: var(--yds-radius-none);
   font-family: var(--yds-font-family-base);
@@ -609,6 +718,13 @@
   transition: all 0.2s ease;
   padding: 0;
   flex-shrink: 0;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+/* 确保 Fragment 内的按钮样式正确 */
+.input-with-clear > .clear-button {
+  z-index: 10;
 }
 
 .clear-button svg {
@@ -739,7 +855,7 @@ textarea::placeholder,
   align-items: center;
   justify-content: center;
   background-color: rgba(27, 27, 27, 0.16);
-  border: 2px solid #ff0000 !important;  /* 调试用红色边框 */
+  border: none;
   border-radius: 72px;
   cursor: pointer;
   transition: background-color 0.2s ease;
@@ -769,7 +885,7 @@ textarea::placeholder,
   top: 50%;
   transform: translateY(-50%);
   background-color: #FFFFFF !important;
-  border: 1px solid #000 !important;  /* 调试用黑色边框 */
+  border: none;
   border-radius: 50%;
   transition: transform 0.2s ease, left 0.2s ease;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
@@ -928,6 +1044,7 @@ textarea::placeholder,
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 1000;
   animation: toast-slide-up 0.3s ease-out;
+  white-space: nowrap;
 }
 
 /* Toast 成功状态 */
