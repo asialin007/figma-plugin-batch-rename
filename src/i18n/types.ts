@@ -16,7 +16,7 @@ export interface TranslationMessages {
   // 选项卡
   tabs: {
     layer: string      // 图层命名
-    export: string     // 切图命名
+    slice: string      // 切图命名
   }
 
   // 表单标签

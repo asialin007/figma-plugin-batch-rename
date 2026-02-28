@@ -14,7 +14,17 @@ function Plugin() {
   // 语言状态
   const [locale, setLocale] = useState<Locale>('zh-CN')
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [isDropdownClosing, setIsDropdownClosing] = useState(false)
   const t = useMemo(() => getTranslation(locale), [locale])
+
+  // 关闭下拉菜单（带动画）
+  const closeDropdown = () => {
+    setIsDropdownClosing(true)
+    setTimeout(() => {
+      setIsDropdownOpen(false)
+      setIsDropdownClosing(false)
+    }, 150)
+  }
 
   // 表单状态
   const [renameValue, setRenameValue] = useState('')  // 重命名
@@ -30,7 +40,7 @@ function Plugin() {
   const [allSelectedNames, setAllSelectedNames] = useState<string[]>([])  // 所有选中图层的名称列表
   const [showToast, setShowToast] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
-  const [currentMode, setCurrentMode] = useState<'layer' | 'export'>('layer')
+  const [currentMode, setCurrentMode] = useState<'layer' | 'slice'>('layer')
 
   // 切图命名状态
   const [useYoungPrefix, setUseYoungPrefix] = useState(false)
@@ -283,7 +293,7 @@ function Plugin() {
             hasManuallyEditedNameRef.current = false
           }
           // 切图模式：单个图层时自动填充图层名称到输入框
-          else if (currentMode === 'export' && count === 1 && selectedName) {
+          else if (currentMode === 'slice' && count === 1 && selectedName) {
             // 检测是否选中了新的图层（图层名称发生变化）
             const isLayerChanged = selectedName !== selectedLayerName
 
@@ -321,7 +331,7 @@ function Plugin() {
 
   // 计算预览名称
   const previewName = useMemo(() => {
-    if (currentMode === 'export') {
+    if (currentMode === 'slice') {
       // 切图命名模式：先检查是否选中图层
       if (selectionCount === 0) return PLACEHOLDERS.SELECT_LAYERS_FIRST
 
@@ -506,7 +516,7 @@ function Plugin() {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement
       if (!target.closest(`.${styles['language-selector']}`)) {
-        setIsDropdownOpen(false)
+        closeDropdown()
       }
     }
 
@@ -536,11 +546,11 @@ function Plugin() {
                 {t.tabs.layer}
               </button>
               <button
-                class={`${styles['mode-tab']} ${currentMode === 'export' ? styles['mode-tab--active'] : ''}`}
-                onClick={() => { setCurrentMode('export'); hasAutoFilledRef.current = false; setHasManuallyEditedName(false); hasManuallyEditedNameRef.current = false; userClearedInputRef.current = false }}
+                class={`${styles['mode-tab']} ${currentMode === 'slice' ? styles['mode-tab--active'] : ''}`}
+                onClick={() => { setCurrentMode('slice'); hasAutoFilledRef.current = false; setHasManuallyEditedName(false); hasManuallyEditedNameRef.current = false; userClearedInputRef.current = false }}
                 type="button"
               >
-                {t.tabs.export}
+                {t.tabs.slice}
               </button>
             </div>
 
@@ -551,20 +561,21 @@ function Plugin() {
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
                 type="button"
               >
-                <span>{LOCALE_CONFIGS.find(c => c.value === locale)?.label}</span>
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M7 10L12 15L17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class={styles['globe-icon']}>
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                  <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" stroke="currentColor" stroke-width="2"/>
                 </svg>
+                <span class={styles['language-tooltip']}>{LOCALE_CONFIGS.find(c => c.value === locale)?.label}</span>
               </button>
               {isDropdownOpen && (
-                <div class={styles['language-dropdown']}>
+                <div class={`${styles['language-dropdown']} ${isDropdownClosing ? styles['language-dropdown--closing'] : ''}`}>
                   {LOCALE_CONFIGS.map((config) => (
                     <button
                       key={config.value}
                       class={`${styles['language-option']} ${locale === config.value ? styles['language-option--selected'] : ''}`}
                       onClick={() => {
                         setLocale(config.value)
-                        setIsDropdownOpen(false)
+                        closeDropdown()
                       }}
                       type="button"
                     >
@@ -585,8 +596,8 @@ function Plugin() {
                 </span>
               )}
             </div>
-            <div class={`${styles['preview-content']} ${currentMode === 'export' ? styles['preview-content--vertical'] : ''}`}>
-              {currentMode === 'export' ? (
+            <div class={`${styles['preview-content']} ${currentMode === 'slice' ? styles['preview-content--vertical'] : ''}`}>
+              {currentMode === 'slice' ? (
                 // 切图命名模式
                 <Fragment>
                   {selectionCount > 1 && !hasManuallyEditedName ? (
@@ -1121,7 +1132,7 @@ function Plugin() {
         )}
 
         {/* 切图命名表单 */}
-        {currentMode === 'export' && (
+        {currentMode === 'slice' && (
           <div class={styles['export-form']}>
             {/* 5. 名称/功能 - 移到最上面 */}
             <div class={styles['form-group']}>

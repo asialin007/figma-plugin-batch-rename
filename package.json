@@ -30,7 +30,7 @@
       "figma"
     ],
     "id": "batch-rename-layers",
-    "name": "Batch Rename 批量重命名",
+    "name": "Batch Rename",
     "main": "src/main.ts",
     "ui": "src/ui.tsx"
   }

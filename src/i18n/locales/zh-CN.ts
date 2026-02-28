@@ -7,7 +7,7 @@ export const zhCN: TranslationMessages = {
   // 选项卡
   tabs: {
     layer: '图层命名',
-    export: '切图命名'
+    slice: '切图命名'
   },
 
   // 表单标签

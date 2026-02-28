@@ -6,8 +6,8 @@ import { TranslationMessages } from '../types'
 export const enUS: TranslationMessages = {
   // 选项卡
   tabs: {
-    layer: 'Layer',
-    export: 'Export'
+    layer: 'Layer Rename',
+    slice: 'Slice Rename'
   },
 
   // 表单标签
